@@ -2,7 +2,8 @@ from flask import Blueprint, jsonify
 from datetime import datetime, timedelta
 from models import (
     db, Post, PostStatus, Log, LogLevel,
-    Config, LinkedInCredential, ConnectionJob
+    Config, LinkedInCredential, ConnectionJob,
+    ConnectionConfiguration, LinkedInProfile, DailyConnectionStats
 )
 from scheduler import get_scheduler
 
@@ -28,6 +29,20 @@ def get_dashboard_stats():
     # Check LinkedIn connection
     linkedin_connected = LinkedInCredential.query.count() > 0
     
+    # Connection stats
+    total_profiles = LinkedInProfile.query.count()
+    pending_jobs = ConnectionJob.query.filter(ConnectionJob.status == PostStatus.PENDING).count()
+    running_jobs = ConnectionJob.query.filter(ConnectionJob.status == PostStatus.RUNNING).count()
+    completed_jobs = ConnectionJob.query.filter(ConnectionJob.status == PostStatus.COMPLETED).count()
+    total_configs = ConnectionConfiguration.query.count()
+    
+    # Today's connection stats
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today_stats = DailyConnectionStats.query.filter_by(date=today).first()
+    today_sent = today_stats.requests_sent if today_stats else 0
+    today_accepted = today_stats.requests_accepted if today_stats else 0
+    today_failed = today_stats.requests_failed if today_stats else 0
+    
     return jsonify({
         'success': True,
         'data': {
@@ -45,6 +60,18 @@ def get_dashboard_stats():
             },
             'linkedin': {
                 'connected': linkedin_connected
+            },
+            'connections': {
+                'total_profiles': total_profiles,
+                'pending_jobs': pending_jobs,
+                'running_jobs': running_jobs,
+                'completed_jobs': completed_jobs,
+                'total_configs': total_configs,
+                'today': {
+                    'sent': today_sent,
+                    'accepted': today_accepted,
+                    'failed': today_failed
+                }
             }
         }
     })
