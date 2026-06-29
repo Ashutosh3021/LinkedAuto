@@ -2,4 +2,7 @@
 .venv/
 __pycache__/
 plan.md
-deploy.md
+*.db
+*.sqlite
+*.sqlite3
+instance/

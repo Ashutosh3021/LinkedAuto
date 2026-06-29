@@ -11,7 +11,12 @@ class Config:
     
     FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend')
     
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///linkedin_automation.db')
+    # Database configuration - support PostgreSQL for Render
+    database_url = os.getenv('DATABASE_URL', 'sqlite:///linkedin_automation.db')
+    # Render provides DATABASE_URL starting with postgres://, but SQLAlchemy requires postgresql://
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
