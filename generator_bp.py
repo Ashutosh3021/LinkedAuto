@@ -43,6 +43,11 @@ def generate_single_post():
                 'title': post.title,
                 'content': post.content,
                 'status': post.status.value,
+                'scheduled_at': post.scheduled_at.isoformat() if post.scheduled_at else None,
+                'published_at': post.published_at.isoformat() if post.published_at else None,
+                'retry_count': post.retry_count,
+                'last_error': post.last_error,
+                'job_id': post.job_id,
                 'created_at': post.created_at.isoformat()
             }
         }), 201
@@ -88,6 +93,11 @@ def generate_batch_posts():
                     'title': post.title,
                     'content': post.content,
                     'status': post.status.value,
+                    'scheduled_at': post.scheduled_at.isoformat() if post.scheduled_at else None,
+                    'published_at': post.published_at.isoformat() if post.published_at else None,
+                    'retry_count': post.retry_count,
+                    'last_error': post.last_error,
+                    'job_id': post.job_id,
                     'created_at': post.created_at.isoformat()
                 }
                 for post in posts
@@ -109,6 +119,11 @@ def get_posts():
                 'title': post.title,
                 'content': post.content,
                 'status': post.status.value,
+                'scheduled_at': post.scheduled_at.isoformat() if post.scheduled_at else None,
+                'published_at': post.published_at.isoformat() if post.published_at else None,
+                'retry_count': post.retry_count,
+                'last_error': post.last_error,
+                'job_id': post.job_id,
                 'created_at': post.created_at.isoformat(),
                 'updated_at': post.updated_at.isoformat()
             }

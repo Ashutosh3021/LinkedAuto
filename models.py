@@ -41,6 +41,9 @@ class Post(db.Model):
     status = Column(Enum(PostStatus), default=PostStatus.DRAFT, nullable=False)
     scheduled_at = Column(DateTime, nullable=True)
     published_at = Column(DateTime, nullable=True)
+    retry_count = Column(Integer, default=0)
+    last_error = Column(Text, nullable=True)
+    job_id = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

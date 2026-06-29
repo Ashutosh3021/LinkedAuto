@@ -1,0 +1,217 @@
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.executors.pool import ThreadPoolExecutor
+from config import Config
+from models import db, Post, PostStatus, Log, LogLevel
+from database import PostHelper, LogHelper
+
+
+logger = logging.getLogger(__name__)
+
+
+class Publisher:
+    @staticmethod
+    def publish_post(post_id: int) -> bool:
+        logger.info(f"Publishing post {post_id} - placeholder")
+        return True
+
+
+class SchedulerService:
+    RETRY_INTERVALS = [15, 60, 360]
+    MAX_RETRIES = 3
+    
+    def __init__(self, app):
+        self.app = app
+        self.scheduler = None
+        
+    def init_scheduler(self):
+        jobstores = {
+            'default': SQLAlchemyJobStore(url=Config.SQLALCHEMY_DATABASE_URI, engine_options={'connect_args': {'check_same_thread': False}} if 'sqlite' in Config.SQLALCHEMY_DATABASE_URI else {})
+        }
+        executors = {
+            'default': ThreadPoolExecutor(10)
+        }
+        job_defaults = {
+            'coalesce': False,
+            'max_instances': 1
+        }
+        
+        self.scheduler = BackgroundScheduler(
+            jobstores=jobstores,
+            executors=executors,
+            job_defaults=job_defaults,
+            timezone='UTC'
+        )
+        
+        self.scheduler.add_job(
+            self.process_pending_posts,
+            'interval',
+            minutes=1,
+            id='process_pending_posts',
+            name='Process pending posts every minute',
+            replace_existing=True
+        )
+        
+        self.scheduler.start()
+        logger.info("Scheduler initialized")
+    
+    def process_pending_posts(self):
+        with self.app.app_context():
+            now = datetime.utcnow()
+            
+            scheduled_posts = Post.query.filter(
+                Post.status == PostStatus.SCHEDULED,
+                Post.scheduled_at <= now
+            ).all()
+            
+            for post in scheduled_posts:
+                self.execute_post_job(post)
+    
+    def execute_post_job(self, post: Post):
+        try:
+            logger.info(f"Executing post job for post {post.id}")
+            
+            success = Publisher.publish_post(post.id)
+            
+            if success:
+                post.status = PostStatus.PUBLISHED
+                post.published_at = datetime.utcnow()
+                post.last_error = None
+                db.session.commit()
+                
+                LogHelper.create(
+                    Log,
+                    level=LogLevel.INFO,
+                    message=f"Post {post.id} published successfully",
+                    context=f"Post ID: {post.id}"
+                )
+            else:
+                self.handle_post_failure(post, "Publishing failed")
+                
+        except Exception as e:
+            logger.error(f"Error publishing post {post.id}: {e}")
+            self.handle_post_failure(post, str(e))
+    
+    def handle_post_failure(self, post: Post, error_message: str):
+        post.retry_count += 1
+        post.last_error = error_message
+        
+        LogHelper.create(
+            Log,
+            level=LogLevel.ERROR,
+            message=f"Post {post.id} failed to publish: {error_message}",
+            context=f"Post ID: {post.id}, Retry count: {post.retry_count}"
+        )
+        
+        if post.retry_count >= self.MAX_RETRIES:
+            post.status = PostStatus.FAILED
+            db.session.commit()
+            logger.warning(f"Post {post.id} failed after {self.MAX_RETRIES} retries")
+        else:
+            retry_minutes = self.RETRY_INTERVALS[post.retry_count - 1]
+            next_attempt = datetime.utcnow() + timedelta(minutes=retry_minutes)
+            post.scheduled_at = next_attempt
+            db.session.commit()
+            logger.info(f"Post {post.id} will retry in {retry_minutes} minutes at {next_attempt}")
+    
+    def schedule_post(self, post_id: int, scheduled_at: datetime) -> Optional[str]:
+        with self.app.app_context():
+            post = PostHelper.get(Post, post_id)
+            if not post:
+                return None
+            
+            job_id = f"post_{post_id}"
+            post.scheduled_at = scheduled_at
+            post.status = PostStatus.SCHEDULED
+            post.job_id = job_id
+            db.session.commit()
+            
+            LogHelper.create(
+                Log,
+                level=LogLevel.INFO,
+                message=f"Post {post_id} scheduled for {scheduled_at}",
+                context=f"Post ID: {post_id}, Scheduled at: {scheduled_at}"
+            )
+            
+            return job_id
+    
+    def cancel_schedule(self, post_id: int) -> bool:
+        with self.app.app_context():
+            post = PostHelper.get(Post, post_id)
+            if not post:
+                return False
+            
+            post.status = PostStatus.DRAFT
+            post.scheduled_at = None
+            post.job_id = None
+            post.retry_count = 0
+            post.last_error = None
+            db.session.commit()
+            
+            LogHelper.create(
+                Log,
+                level=LogLevel.INFO,
+                message=f"Post {post_id} schedule canceled",
+                context=f"Post ID: {post_id}"
+            )
+            
+            return True
+    
+    def reschedule_post(self, post_id: int, new_scheduled_at: datetime) -> bool:
+        with self.app.app_context():
+            post = PostHelper.get(Post, post_id)
+            if not post:
+                return False
+            
+            post.scheduled_at = new_scheduled_at
+            post.retry_count = 0
+            post.last_error = None
+            db.session.commit()
+            
+            LogHelper.create(
+                Log,
+                level=LogLevel.INFO,
+                message=f"Post {post_id} rescheduled to {new_scheduled_at}",
+                context=f"Post ID: {post_id}, New scheduled at: {new_scheduled_at}"
+            )
+            
+            return True
+    
+    def get_queue(self) -> List[Dict]:
+        with self.app.app_context():
+            posts = Post.query.filter(
+                Post.status.in_([PostStatus.SCHEDULED, PostStatus.FAILED])
+            ).order_by(Post.scheduled_at).all()
+            
+            return [
+                {
+                    'id': post.id,
+                    'title': post.title,
+                    'content': post.content,
+                    'status': post.status.value,
+                    'scheduled_at': post.scheduled_at.isoformat() if post.scheduled_at else None,
+                    'retry_count': post.retry_count,
+                    'last_error': post.last_error,
+                    'job_id': post.job_id
+                }
+                for post in posts
+            ]
+    
+    def shutdown(self):
+        if self.scheduler and self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("Scheduler shut down")
+
+
+_scheduler_instance = None
+
+
+def get_scheduler(app=None):
+    global _scheduler_instance
+    if _scheduler_instance is None and app is not None:
+        _scheduler_instance = SchedulerService(app)
+        _scheduler_instance.init_scheduler()
+    return _scheduler_instance

@@ -6,6 +6,8 @@ from config import Config
 from database import init_db
 from config_bp import config_bp
 from generator_bp import generator_bp
+from scheduler_bp import scheduler_bp
+from scheduler import get_scheduler
 
 def setup_logging(app):
     log_level = getattr(logging, app.config['LOG_LEVEL'].upper(), logging.INFO)
@@ -37,6 +39,10 @@ def create_app(config_class=Config):
     app.register_blueprint(main_bp)
     app.register_blueprint(config_bp)
     app.register_blueprint(generator_bp)
+    app.register_blueprint(scheduler_bp)
+    
+    with app.app_context():
+        scheduler = get_scheduler(app)
     
     @app.errorhandler(404)
     def not_found(error):
