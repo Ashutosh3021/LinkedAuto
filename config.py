@@ -13,3 +13,7 @@ class Config:
     
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///linkedin_automation.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o-mini')
+    OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'

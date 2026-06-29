@@ -5,6 +5,7 @@ from flask_cors import CORS
 from config import Config
 from database import init_db
 from config_bp import config_bp
+from generator_bp import generator_bp
 
 def setup_logging(app):
     log_level = getattr(logging, app.config['LOG_LEVEL'].upper(), logging.INFO)
@@ -35,6 +36,7 @@ def create_app(config_class=Config):
     main_bp = create_main_blueprint()
     app.register_blueprint(main_bp)
     app.register_blueprint(config_bp)
+    app.register_blueprint(generator_bp)
     
     @app.errorhandler(404)
     def not_found(error):
