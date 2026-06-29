@@ -8,6 +8,7 @@ from config_bp import config_bp
 from generator_bp import generator_bp
 from scheduler_bp import scheduler_bp
 from linkedin_bp import linkedin_bp
+from dashboard_bp import dashboard_bp
 from scheduler import get_scheduler
 
 def setup_logging(app):
@@ -42,6 +43,7 @@ def create_app(config_class=Config):
     app.register_blueprint(generator_bp)
     app.register_blueprint(scheduler_bp)
     app.register_blueprint(linkedin_bp)
+    app.register_blueprint(dashboard_bp)
     
     with app.app_context():
         scheduler = get_scheduler(app)
