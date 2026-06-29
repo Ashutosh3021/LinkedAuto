@@ -10,3 +10,6 @@ class Config:
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     
     FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend')
+    
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///linkedin_automation.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False

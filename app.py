@@ -1,8 +1,9 @@
 import os
 import logging
-from flask import Flask, render_template, send_from_directory
+from flask import Flask, render_template, send_from_directory, Blueprint
 from flask_cors import CORS
 from config import Config
+from database import init_db
 
 def setup_logging(app):
     log_level = getattr(logging, app.config['LOG_LEVEL'].upper(), logging.INFO)
@@ -27,6 +28,8 @@ def create_app(config_class=Config):
     setup_logging(app)
     
     CORS(app)
+    
+    init_db(app)
     
     main_bp = create_main_blueprint()
     app.register_blueprint(main_bp)
@@ -76,6 +79,5 @@ def create_main_blueprint():
     return bp
 
 if __name__ == '__main__':
-    from flask import Blueprint
     app = create_app()
     app.run(host='0.0.0.0', port=5000)
