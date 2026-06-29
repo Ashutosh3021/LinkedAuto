@@ -4,21 +4,24 @@ import requests
 from typing import Dict, List, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from config import Config
-from models import Post, PostStatus
+from models import Post, PostStatus, AIProvider, db
 from database import PostHelper
+from utils import decrypt_api_key
+
 
 logger = logging.getLogger(__name__)
 
 
-class OpenRouterError(Exception):
+class AIProviderError(Exception):
     pass
 
 
-class OpenRouterAPI:
-    def __init__(self):
-        self.api_key = Config.OPENROUTER_API_KEY
-        self.base_url = Config.OPENROUTER_BASE_URL
-        self.model = Config.OPENROUTER_MODEL
+class AIProviderAPI:
+    def __init__(self, provider: AIProvider):
+        self.provider = provider
+        self.api_key = decrypt_api_key(provider.api_key_encrypted)
+        self.base_url = provider.base_url
+        self.model = provider.model_name
 
     def _get_headers(self) -> Dict[str, str]:
         return {
@@ -31,11 +34,11 @@ class OpenRouterAPI:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((requests.exceptions.RequestException, OpenRouterError))
+        retry=retry_if_exception_type((requests.exceptions.RequestException, AIProviderError))
     )
     def generate_completion(self, messages: List[Dict[str, str]], max_tokens: int = 1000) -> str:
         if not self.api_key:
-            raise OpenRouterError("OpenRouter API key not configured")
+            raise AIProviderError(f"API key not configured for provider {self.provider.name}")
 
         url = f"{self.base_url}/chat/completions"
         payload = {
@@ -50,11 +53,11 @@ class OpenRouterAPI:
             result = response.json()
             
             if "choices" not in result or not result["choices"]:
-                raise OpenRouterError("Invalid response from OpenRouter")
+                raise AIProviderError(f"Invalid response from provider {self.provider.name}")
             
             return result["choices"][0]["message"]["content"].strip()
         except requests.exceptions.RequestException as e:
-            raise OpenRouterError(f"API request failed: {str(e)}") from e
+            raise AIProviderError(f"API request failed: {str(e)}") from e
 
 
 class PromptBuilder:
@@ -106,8 +109,41 @@ class PromptBuilder:
 
 class PostGenerator:
     def __init__(self):
-        self.api = OpenRouterAPI()
         self.prompt_builder = PromptBuilder()
+
+    def _get_active_provider(self) -> AIProvider:
+        """Get active AI provider from DB, or fall back to env var"""
+        active_provider = AIProvider.query.filter_by(is_active=True).first()
+        
+        if active_provider:
+            return active_provider
+        
+        # Fallback to OpenRouter from env vars for backward compatibility
+        if Config.OPENROUTER_API_KEY:
+            fallback_provider = AIProvider(
+                name="OpenRouter (Fallback)",
+                model_name=Config.OPENROUTER_MODEL,
+                api_key_encrypted="",  # Not stored in DB
+                base_url=Config.OPENROUTER_BASE_URL,
+                is_active=False
+            )
+            # We'll manually set api key instead of encrypting
+            fallback_provider._api_key = Config.OPENROUTER_API_KEY
+            return fallback_provider
+        
+        raise AIProviderError("No active AI provider configured")
+
+    def _get_api_instance(self, provider: AIProvider) -> AIProviderAPI:
+        """Get API instance, handling fallback case"""
+        if hasattr(provider, '_api_key'):
+            # Fallback case: use env var directly
+            api = AIProviderAPI.__new__(AIProviderAPI)
+            api.provider = provider
+            api.api_key = provider._api_key
+            api.base_url = provider.base_url
+            api.model = provider.model_name
+            return api
+        return AIProviderAPI(provider)
 
     def generate_single_post(
         self,
@@ -120,6 +156,9 @@ class PostGenerator:
         hashtags: Optional[List[str]] = None,
         character_limit: Optional[int] = None
     ) -> Post:
+        provider = self._get_active_provider()
+        api = self._get_api_instance(provider)
+        
         messages = self.prompt_builder.build_post_prompt(
             topic=topic,
             project=project,
@@ -130,7 +169,7 @@ class PostGenerator:
             character_limit=character_limit
         )
         
-        content = self.api.generate_completion(messages, max_tokens=character_limit or 1000)
+        content = api.generate_completion(messages, max_tokens=character_limit or 1000)
         post_title = title or topic
         
         post = PostHelper.create(

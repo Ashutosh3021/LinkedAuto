@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from llm import PostGenerator, OpenRouterError
+from llm import PostGenerator, AIProviderError
 from database import PostHelper
 from models import Post
 
@@ -53,7 +53,7 @@ def generate_single_post():
             }
         }), 201
         
-    except OpenRouterError as e:
+    except AIProviderError as e:
         return jsonify({'error': str(e)}), 500
     except Exception as e:
         return jsonify({'error': f'Failed to generate post: {str(e)}'}), 500

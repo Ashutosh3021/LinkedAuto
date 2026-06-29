@@ -149,6 +149,37 @@ async function getDailyConnectionStats() {
   return apiRequest('/api/connections/stats/daily');
 }
 
+// AI Providers
+async function getProviders() {
+  return apiRequest('/api/config/providers');
+}
+
+async function createProvider(data) {
+  return apiRequest('/api/config/providers', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+async function updateProvider(providerId, data) {
+  return apiRequest(`/api/config/providers/${providerId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+async function deleteProvider(providerId) {
+  return apiRequest(`/api/config/providers/${providerId}`, {
+    method: 'DELETE'
+  });
+}
+
+async function activateProvider(providerId) {
+  return apiRequest(`/api/config/providers/${providerId}/activate`, {
+    method: 'POST'
+  });
+}
+
 /* ================================================================
    2. UTILITY FUNCTIONS
    ================================================================ */
@@ -310,6 +341,44 @@ function closeConfirmDialog() {
   const overlay = $('#confirm-overlay');
   if (overlay) overlay.hidden = true;
   pendingDeleteCallback = null;
+}
+
+/* ================================================================
+   PROVIDER MODAL
+   ================================================================ */
+
+let editingProviderId = null;
+
+function openProviderModal(provider = null) {
+  const overlay = $('#provider-overlay');
+  const title = $('#provider-title');
+  const form = $('#form-provider');
+  
+  editingProviderId = provider?.id || null;
+  
+  if (provider) {
+    title.textContent = 'Edit AI Provider';
+    $('#provider-id').value = provider.id;
+    $('#provider-name').value = provider.name;
+    $('#provider-model').value = provider.model_name;
+    $('#provider-api-key').value = ''; // Don't populate existing key
+    $('#provider-base-url').value = provider.base_url;
+    $('#provider-active').checked = provider.is_active;
+  } else {
+    title.textContent = 'Add AI Provider';
+    form.reset();
+    $('#provider-id').value = '';
+    $('#provider-base-url').value = 'https://openrouter.ai/api/v1';
+  }
+  
+  overlay.hidden = false;
+  $('#provider-name').focus();
+}
+
+function closeProviderModal() {
+  const overlay = $('#provider-overlay');
+  if (overlay) overlay.hidden = true;
+  editingProviderId = null;
 }
 
 /* ================================================================
@@ -795,16 +864,96 @@ function initConnectionsPage() {
    16. SETTINGS PAGE
    ================================================================ */
 
+async function loadProviders() {
+  try {
+    const response = await getProviders();
+    renderProvidersList(response.data || []);
+  } catch (error) {
+    console.error('Failed to load providers:', error);
+    showToast('Failed to load providers', 'error');
+  }
+}
+
+function renderProvidersList(providers) {
+  const container = $('#providers-list');
+  if (!container) return;
+  
+  if (!providers.length) {
+    container.innerHTML = `<p style="color:var(--color-text-faint);">No AI providers configured yet. Add your first provider above!</p>`;
+    return;
+  }
+  
+  container.innerHTML = providers.map(provider => `
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <h4 style="margin:0 0 4px 0;">${escapeHtml(provider.name)}</h4>
+          <p style="margin:0;color:var(--color-text-secondary);font-size:.875rem;">Model: ${escapeHtml(provider.model_name)}</p>
+          <p style="margin:4px 0 0 0;color:var(--color-text-faint);font-size:.75rem;">${escapeHtml(provider.base_url)}</p>
+        </div>
+        ${provider.is_active ? '<span class="badge badge--success" style="margin-left:12px;">Active</span>' : ''}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-sm btn-secondary btn-edit-provider" data-id="${provider.id}">Edit</button>
+        ${!provider.is_active ? `<button class="btn btn-sm btn-primary btn-activate-provider" data-id="${provider.id}">Activate</button>` : ''}
+        <button class="btn btn-sm btn-ghost btn-delete-provider" data-id="${provider.id}" style="color:var(--color-red);">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  
+  $$('.btn-edit-provider', container).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      const provider = providers.find(p => p.id === id);
+      if (provider) openProviderModal(provider);
+    });
+  });
+  
+  $$('.btn-activate-provider', container).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      try {
+        showLoading('Activating provider…');
+        await activateProvider(id);
+        hideLoading();
+        showToast('Provider activated successfully!', 'success');
+        await loadProviders();
+      } catch (error) {
+        hideLoading();
+        showToast('Failed to activate provider', 'error');
+      }
+    });
+  });
+  
+  $$('.btn-delete-provider', container).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      showConfirm('Delete this AI provider? This cannot be undone.', async () => {
+        try {
+          showLoading('Deleting provider…');
+          await deleteProvider(id);
+          hideLoading();
+          showToast('Provider deleted successfully!', 'success');
+          await loadProviders();
+        } catch (error) {
+          hideLoading();
+          showToast('Failed to delete provider', 'error');
+        }
+      });
+    });
+  });
+}
+
 async function initSettingsPage() {
   try {
     const response = await getLinkedInStatus();
     const isConnected = response.data?.is_connected;
     
     if (isConnected) {
-      $('#linkedin-status-text').textContent = 'LinkedIn is connected';
-      $('#linkedin-status-indicator').className = 'status-dot status-dot--success';
-      $('#btn-linkedin-connect').textContent = 'Disconnect LinkedIn';
-      $('#btn-linkedin-connect').onclick = async () => {
+      $('#linkedin-status-text')?.textContent = 'LinkedIn is connected';
+      $('#linkedin-status-indicator')?.className = 'status-dot status-dot--success';
+      $('#btn-linkedin-connect')?.textContent = 'Disconnect LinkedIn';
+      $('#btn-linkedin-connect')?.onclick = async () => {
         try {
           await disconnectLinkedIn();
           showToast('LinkedIn disconnected', 'success');
@@ -814,10 +963,10 @@ async function initSettingsPage() {
         }
       };
     } else {
-      $('#linkedin-status-text').textContent = 'LinkedIn is not connected';
-      $('#linkedin-status-indicator').className = 'status-dot status-dot--error';
-      $('#btn-linkedin-connect').textContent = 'Connect LinkedIn';
-      $('#btn-linkedin-connect').onclick = async () => {
+      $('#linkedin-status-text')?.textContent = 'LinkedIn is not connected';
+      $('#linkedin-status-indicator')?.className = 'status-dot status-dot--error';
+      $('#btn-linkedin-connect')?.textContent = 'Connect LinkedIn';
+      $('#btn-linkedin-connect')?.onclick = async () => {
         try {
           const response = await getLinkedInAuthUrl();
           window.location.href = response.data?.auth_url;
@@ -829,6 +978,58 @@ async function initSettingsPage() {
   } catch (error) {
     console.error('Failed to load LinkedIn status:', error);
   }
+  
+  // Load providers
+  await loadProviders();
+  
+  // Add provider button
+  $('#btn-add-provider')?.addEventListener('click', () => openProviderModal());
+  
+  // Provider modal save
+  $('#btn-provider-save')?.addEventListener('click', async () => {
+    const data = {
+      name: $('#provider-name')?.value.trim(),
+      model_name: $('#provider-model')?.value.trim(),
+      api_key: $('#provider-api-key')?.value.trim(),
+      base_url: $('#provider-base-url')?.value.trim(),
+      is_active: $('#provider-active')?.checked
+    };
+    
+    if (!data.name || !data.model_name || !data.base_url) {
+      showToast('Please fill in all required fields', 'error');
+      return;
+    }
+    
+    if (!editingProviderId && !data.api_key) {
+      showToast('API key is required for new providers', 'error');
+      return;
+    }
+    
+    try {
+      showLoading('Saving provider…');
+      
+      if (editingProviderId) {
+        await updateProvider(editingProviderId, data);
+      } else {
+        await createProvider(data);
+      }
+      
+      hideLoading();
+      closeProviderModal();
+      showToast('Provider saved successfully!', 'success');
+      await loadProviders();
+    } catch (error) {
+      hideLoading();
+      showToast(error.message || 'Failed to save provider', 'error');
+    }
+  });
+  
+  // Provider modal cancel
+  $('#btn-provider-cancel')?.addEventListener('click', closeProviderModal);
+  $('#btn-provider-close')?.addEventListener('click', closeProviderModal);
+  $('#provider-overlay')?.addEventListener('click', e => {
+    if (e.target === $('#provider-overlay')) closeProviderModal();
+  });
 }
 
 /* ================================================================
@@ -857,6 +1058,7 @@ function initModals() {
     if (e.key === 'Escape') {
       closePreviewModal();
       closeConfirmDialog();
+      closeProviderModal();
     }
   });
 }

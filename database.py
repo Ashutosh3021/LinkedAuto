@@ -1,7 +1,7 @@
 from models import (
     db, Config, Post, Log, ConnectionJob,
     LinkedInCredential, ConnectionConfiguration,
-    LinkedInProfile, DailyConnectionStats
+    LinkedInProfile, DailyConnectionStats, AIProvider
 )
 
 def init_db(app):

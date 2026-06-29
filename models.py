@@ -152,3 +152,16 @@ class DailyConnectionStats(db.Model):
     requests_failed = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AIProvider(db.Model):
+    __tablename__ = 'ai_providers'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False, unique=True)
+    model_name = Column(String(255), nullable=False)
+    api_key_encrypted = Column(Text, nullable=False)
+    base_url = Column(String(500), nullable=False, default='https://openrouter.ai/api/v1')
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
