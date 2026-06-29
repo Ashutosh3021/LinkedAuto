@@ -978,7 +978,7 @@ function renderLinkedInAppsList(apps) {
     </div>
   `).join('');
   
-  $('.btn-edit-linkedin-app', container).forEach(btn => {
+  $$('.btn-edit-linkedin-app', container).forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = Number(btn.dataset.id);
       const app = apps.find(a => a.id === id);
@@ -986,7 +986,7 @@ function renderLinkedInAppsList(apps) {
     });
   });
   
-  $('.btn-activate-linkedin-app', container).forEach(btn => {
+  $$('.btn-activate-linkedin-app', container).forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = Number(btn.dataset.id);
       try {
@@ -1002,7 +1002,7 @@ function renderLinkedInAppsList(apps) {
     });
   });
   
-  $('.btn-delete-linkedin-app', container).forEach(btn => {
+  $$('.btn-delete-linkedin-app', container).forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = Number(btn.dataset.id);
       showConfirm('Delete this LinkedIn app? This cannot be undone.', async () => {
@@ -1096,11 +1096,15 @@ async function initSettingsPage() {
     const response = await getLinkedInStatus();
     const isConnected = response.data?.is_connected;
     
+    const statusText = $('#linkedin-status-text');
+    const statusIndicator = $('#linkedin-status-indicator');
+    const connectBtn = $('#btn-linkedin-connect');
+    
     if (isConnected) {
-      $('#linkedin-status-text')?.textContent = 'LinkedIn is connected';
-      $('#linkedin-status-indicator')?.className = 'status-dot status-dot--success';
-      $('#btn-linkedin-connect')?.textContent = 'Disconnect LinkedIn';
-      $('#btn-linkedin-connect')?.onclick = async () => {
+      if (statusText) statusText.textContent = 'LinkedIn is connected';
+      if (statusIndicator) statusIndicator.className = 'status-dot status-dot--success';
+      if (connectBtn) connectBtn.textContent = 'Disconnect LinkedIn';
+      if (connectBtn) connectBtn.onclick = async () => {
         try {
           await disconnectLinkedIn();
           showToast('LinkedIn disconnected', 'success');
@@ -1110,10 +1114,10 @@ async function initSettingsPage() {
         }
       };
     } else {
-      $('#linkedin-status-text')?.textContent = 'LinkedIn is not connected';
-      $('#linkedin-status-indicator')?.className = 'status-dot status-dot--error';
-      $('#btn-linkedin-connect')?.textContent = 'Connect LinkedIn';
-      $('#btn-linkedin-connect')?.onclick = async () => {
+      if (statusText) statusText.textContent = 'LinkedIn is not connected';
+      if (statusIndicator) statusIndicator.className = 'status-dot status-dot--error';
+      if (connectBtn) connectBtn.textContent = 'Connect LinkedIn';
+      if (connectBtn) connectBtn.onclick = async () => {
         try {
           const response = await getLinkedInAuthUrl();
           window.location.href = response.data?.auth_url;
@@ -1270,14 +1274,14 @@ function initHeroActions() {
   if (btnPosting) {
     btnPosting.addEventListener('click', e => {
       e.preventDefault();
-      window.location.href = 'posting.html';
+      window.location.href = '/posting';
     });
   }
 
   if (btnConnections) {
     btnConnections.addEventListener('click', e => {
       e.preventDefault();
-      window.location.href = 'connections.html';
+      window.location.href = '/connections';
     });
   }
 }
