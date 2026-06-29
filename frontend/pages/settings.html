@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedAuto — Settings</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Toast Container -->
+  <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Modal — Post Preview -->
+  <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-title">Post Preview</h2>
+        <button class="modal-close" id="btn-modal-close" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-modal-cancel">Close</button>
+        <button class="btn btn-primary" id="btn-modal-publish">Publish Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div id="confirm-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+    <div class="modal modal--sm">
+      <div class="modal-header">
+        <h2 id="confirm-title">Confirm Delete</h2>
+        <button class="modal-close" id="btn-confirm-close" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-message">Are you sure you want to delete this item? This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button>
+        <button class="btn btn-danger" id="btn-confirm-delete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay" hidden aria-label="Loading">
+    <div class="spinner"></div>
+    <p class="loading-label" id="loading-label">Processing…</p>
+  </div>
+
+  <!-- Top Navigation -->
+  <header class="navbar" role="banner">
+    <div class="navbar-brand">
+      <span class="navbar-logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="22" height="22" rx="5" fill="#0A66C2"/>
+          <path d="M5 8.5H7.5V17H5V8.5ZM6.25 7.25C5.56 7.25 5 6.69 5 6C5 5.31 5.56 4.75 6.25 4.75C6.94 4.75 7.5 5.31 7.5 6C7.5 6.69 6.94 7.25 6.25 7.25ZM17 17H14.5V12.75C14.5 11.37 13.63 11 13.25 11C12.87 11 12 11.25 12 12.75V17H9.5V8.5H12V9.5C12.37 8.87 13.25 8.5 14.25 8.5C16 8.5 17 9.75 17 12.25V17Z" fill="white"/>
+        </svg>
+      </span>
+      <span class="navbar-appname">LinkedAuto</span>
+    </div>
+
+    <button class="navbar-toggle" id="btn-nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="main-nav">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="navbar-nav" id="main-nav" role="navigation">
+      <a href="home.html" class="nav-link" data-page="home">Home</a>
+      <a href="posting.html" class="nav-link" data-page="posting">Posting</a>
+      <a href="connections.html" class="nav-link" data-page="connections">Connections</a>
+      <a href="dashboard.html" class="nav-link" data-page="dashboard">Dashboard</a>
+      <a href="logs.html" class="nav-link" data-page="logs">Logs</a>
+      <a href="settings.html" class="nav-link active" data-page="settings">Settings</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content" role="main">
+    <!-- Progress Bar -->
+    <div class="progress-bar-wrap" id="progress-bar-wrap" hidden aria-label="Progress">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <!-- Section — Settings -->
+    <section class="section section-alt">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">Settings</h2>
+          <p class="section-desc">Application-level configuration and data management.</p>
+        </div>
+
+        <form id="form-settings" name="app-settings" novalidate>
+          <div class="form-grid">
+            <fieldset class="card fieldset-full">
+              <legend class="fieldset-legend">Appearance</legend>
+              <div class="form-group">
+                <label class="form-label" for="setting-theme">Theme</label>
+                <select class="form-select" id="setting-theme" name="theme">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark (coming soon)</option>
+                  <option value="system">System Default</option>
+                </select>
+              </div>
+            </fieldset>
+
+            <fieldset class="card fieldset-full">
+              <legend class="fieldset-legend">Data</legend>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="setting-db-location">Database Location</label>
+                  <input class="form-input" type="text" id="setting-db-location" name="db_location" value="./data/linkedauto.db" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="setting-scheduler-interval">Scheduler Interval (minutes)</label>
+                  <input class="form-input" type="number" id="setting-scheduler-interval" name="scheduler_interval" min="1" value="5" />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset class="card fieldset-full">
+              <legend class="fieldset-legend">Import / Export</legend>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="setting-export-config">Export Configuration</label>
+                  <button type="button" class="btn btn-secondary" id="btn-export-config">Export JSON</button>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="setting-import-config">Import Configuration</label>
+                  <input class="form-input" type="file" id="setting-import-config" name="import_config" accept=".json" />
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+            <button type="reset"  class="btn btn-ghost"   id="btn-reset-settings">Reset</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer" role="contentinfo">
+    <div class="container">
+      <p class="footer-text">LinkedAuto — LinkedIn Automation Tool © 2024</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

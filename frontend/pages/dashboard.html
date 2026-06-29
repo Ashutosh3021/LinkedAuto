@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedAuto — Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Toast Container -->
+  <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Modal — Post Preview -->
+  <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-title">Post Preview</h2>
+        <button class="modal-close" id="btn-modal-close" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-modal-cancel">Close</button>
+        <button class="btn btn-primary" id="btn-modal-publish">Publish Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div id="confirm-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+    <div class="modal modal--sm">
+      <div class="modal-header">
+        <h2 id="confirm-title">Confirm Delete</h2>
+        <button class="modal-close" id="btn-confirm-close" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-message">Are you sure you want to delete this item? This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button>
+        <button class="btn btn-danger" id="btn-confirm-delete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay" hidden aria-label="Loading">
+    <div class="spinner"></div>
+    <p class="loading-label" id="loading-label">Processing…</p>
+  </div>
+
+  <!-- Top Navigation -->
+  <header class="navbar" role="banner">
+    <div class="navbar-brand">
+      <span class="navbar-logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="22" height="22" rx="5" fill="#0A66C2"/>
+          <path d="M5 8.5H7.5V17H5V8.5ZM6.25 7.25C5.56 7.25 5 6.69 5 6C5 5.31 5.56 4.75 6.25 4.75C6.94 4.75 7.5 5.31 7.5 6C7.5 6.69 6.94 7.25 6.25 7.25ZM17 17H14.5V12.75C14.5 11.37 13.63 11 13.25 11C12.87 11 12 11.25 12 12.75V17H9.5V8.5H12V9.5C12.37 8.87 13.25 8.5 14.25 8.5C16 8.5 17 9.75 17 12.25V17Z" fill="white"/>
+        </svg>
+      </span>
+      <span class="navbar-appname">LinkedAuto</span>
+    </div>
+
+    <button class="navbar-toggle" id="btn-nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="main-nav">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="navbar-nav" id="main-nav" role="navigation">
+      <a href="home.html" class="nav-link" data-page="home">Home</a>
+      <a href="posting.html" class="nav-link" data-page="posting">Posting</a>
+      <a href="connections.html" class="nav-link" data-page="connections">Connections</a>
+      <a href="dashboard.html" class="nav-link active" data-page="dashboard">Dashboard</a>
+      <a href="logs.html" class="nav-link" data-page="logs">Logs</a>
+      <a href="settings.html" class="nav-link" data-page="settings">Settings</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content" role="main">
+    <!-- Progress Bar -->
+    <div class="progress-bar-wrap" id="progress-bar-wrap" hidden aria-label="Progress">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <!-- Section — Dashboard -->
+    <section class="section section-alt">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">Dashboard</h2>
+          <p class="section-desc">Real-time overview of your automation activity.</p>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="stat-card">
+            <span class="stat-icon stat-icon--blue">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 14l4-4 4 4 4-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-generated">48</span>
+              <span class="stat-label">Posts Generated</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon stat-icon--gray">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 2v4M13 2v4M3 9h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-scheduled">24</span>
+              <span class="stat-label">Posts Scheduled</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon stat-icon--green">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-published">18</span>
+              <span class="stat-label">Posts Published</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon stat-icon--amber">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M10 6v4l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-pending">6</span>
+              <span class="stat-label">Pending</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon stat-icon--red">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M10 7v3M10 13h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-failed">2</span>
+              <span class="stat-label">Failed</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon stat-icon--blue">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M9 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" stroke-width="1.5"/><path d="M3 18a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 7l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value" id="stat-connections">143</span>
+              <span class="stat-label">Connections Sent</span>
+            </div>
+          </div>
+          <div class="stat-card stat-card--wide">
+            <span class="stat-icon stat-icon--green">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value stat-value--badge stat-value--active" id="stat-scheduler">Active</span>
+              <span class="stat-label">Scheduler</span>
+            </div>
+          </div>
+          <div class="stat-card stat-card--wide">
+            <span class="stat-icon stat-icon--green">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" stroke="currentColor" stroke-width="1.5"/><path d="M10 7v3l2 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <div class="stat-info">
+              <span class="stat-value stat-value--badge stat-value--active" id="stat-api">Connected</span>
+              <span class="stat-label">API Status</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer" role="contentinfo">
+    <div class="container">
+      <p class="footer-text">LinkedAuto — LinkedIn Automation Tool © 2024</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
