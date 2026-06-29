@@ -1,4 +1,5 @@
 import os
+import atexit
 import logging
 from flask import Flask, render_template, send_from_directory, Blueprint
 from flask_cors import CORS
@@ -49,6 +50,12 @@ def create_app(config_class=Config):
     
     with app.app_context():
         scheduler = get_scheduler(app)
+    
+    # Register shutdown handler
+    def shutdown_scheduler():
+        if scheduler and scheduler.scheduler:
+            scheduler.shutdown()
+    atexit.register(shutdown_scheduler)
     
     @app.errorhandler(404)
     def not_found(error):

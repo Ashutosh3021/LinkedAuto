@@ -1,11 +1,12 @@
 import logging
 import secrets
+import requests
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from requests_oauthlib import OAuth2Session
 from config import Config
-from models import db, LinkedInCredential
-from database import LogHelper, LogLevel, PostHelper, Post
+from models import db, LinkedInCredential, LogLevel, Post
+from database import LogHelper, PostHelper
 
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,6 @@ class LinkedInPublisher:
         self.userinfo_url = 'https://api.linkedin.com/v2/userinfo'
         
     def get_user_info(self, access_token: str) -> Optional[Dict[str, Any]]:
-        import requests
         headers = {
             'Authorization': f'Bearer {access_token}'
         }
@@ -139,7 +139,6 @@ class LinkedInPublisher:
             return None
     
     def publish_post(self, post_content: str) -> Optional[Dict[str, Any]]:
-        import requests
         credential = self.token_manager.get_valid_credential()
         if not credential:
             raise Exception("No valid LinkedIn credentials available")

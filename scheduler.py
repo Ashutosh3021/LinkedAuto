@@ -12,11 +12,83 @@ from linkedin import get_linkedin_publisher
 
 logger = logging.getLogger(__name__)
 
+# Global variables for app and scheduler service
+_app = None
+_scheduler_instance = None
+
+# Constants
+RETRY_INTERVALS = [15, 60, 360]
+MAX_RETRIES = 3
+
+
+def _process_pending_posts():
+    """Standalone function to process pending posts (picklable)"""
+    if not _app:
+        logger.warning("App not initialized, skipping post processing")
+        return
+    
+    with _app.app_context():
+        now = datetime.utcnow()
+        
+        scheduled_posts = Post.query.filter(
+            Post.status == PostStatus.SCHEDULED,
+            Post.scheduled_at <= now
+        ).all()
+        
+        for post in scheduled_posts:
+            _execute_post_job(post)
+
+
+def _execute_post_job(post: Post):
+    try:
+        logger.info(f"Executing post job for post {post.id}")
+        
+        publisher = get_linkedin_publisher()
+        result = publisher.publish_post(post.content)
+        
+        post.status = PostStatus.PUBLISHED
+        post.published_at = datetime.utcnow()
+        post.linkedin_post_id = result.get('post_id') if result else None
+        post.last_error = None
+        post.retry_count = 0
+        db.session.commit()
+        
+        LogHelper.create(
+            Log,
+            level=LogLevel.INFO,
+            message=f"Post {post.id} published successfully",
+            context=f"Post ID: {post.id}, LinkedIn Post ID: {post.linkedin_post_id}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error publishing post {post.id}: {e}")
+        _handle_post_failure(post, str(e))
+
+
+def _handle_post_failure(post: Post, error_message: str):
+    post.retry_count += 1
+    post.last_error = error_message
+    
+    LogHelper.create(
+        Log,
+        level=LogLevel.ERROR,
+        message=f"Post {post.id} failed to publish: {error_message}",
+        context=f"Post ID: {post.id}, Retry count: {post.retry_count}"
+    )
+    
+    if post.retry_count >= MAX_RETRIES:
+        post.status = PostStatus.FAILED
+        db.session.commit()
+        logger.warning(f"Post {post.id} failed after {MAX_RETRIES} retries")
+    else:
+        retry_minutes = RETRY_INTERVALS[post.retry_count - 1]
+        next_attempt = datetime.utcnow() + timedelta(minutes=retry_minutes)
+        post.scheduled_at = next_attempt
+        db.session.commit()
+        logger.info(f"Post {post.id} will retry in {retry_minutes} minutes at {next_attempt}")
+
 
 class SchedulerService:
-    RETRY_INTERVALS = [15, 60, 360]
-    MAX_RETRIES = 3
-    
     def __init__(self, app):
         self.app = app
         self.scheduler = None
@@ -41,7 +113,7 @@ class SchedulerService:
         )
         
         self.scheduler.add_job(
-            self.process_pending_posts,
+            _process_pending_posts,
             'interval',
             minutes=1,
             id='process_pending_posts',
@@ -51,65 +123,6 @@ class SchedulerService:
         
         self.scheduler.start()
         logger.info("Scheduler initialized")
-    
-    def process_pending_posts(self):
-        with self.app.app_context():
-            now = datetime.utcnow()
-            
-            scheduled_posts = Post.query.filter(
-                Post.status == PostStatus.SCHEDULED,
-                Post.scheduled_at <= now
-            ).all()
-            
-            for post in scheduled_posts:
-                self.execute_post_job(post)
-    
-    def execute_post_job(self, post: Post):
-        try:
-            logger.info(f"Executing post job for post {post.id}")
-            
-            publisher = get_linkedin_publisher()
-            result = publisher.publish_post(post.content)
-            
-            post.status = PostStatus.PUBLISHED
-            post.published_at = datetime.utcnow()
-            post.linkedin_post_id = result.get('post_id') if result else None
-            post.last_error = None
-            post.retry_count = 0
-            db.session.commit()
-            
-            LogHelper.create(
-                Log,
-                level=LogLevel.INFO,
-                message=f"Post {post.id} published successfully",
-                context=f"Post ID: {post.id}, LinkedIn Post ID: {post.linkedin_post_id}"
-            )
-            
-        except Exception as e:
-            logger.error(f"Error publishing post {post.id}: {e}")
-            self.handle_post_failure(post, str(e))
-    
-    def handle_post_failure(self, post: Post, error_message: str):
-        post.retry_count += 1
-        post.last_error = error_message
-        
-        LogHelper.create(
-            Log,
-            level=LogLevel.ERROR,
-            message=f"Post {post.id} failed to publish: {error_message}",
-            context=f"Post ID: {post.id}, Retry count: {post.retry_count}"
-        )
-        
-        if post.retry_count >= self.MAX_RETRIES:
-            post.status = PostStatus.FAILED
-            db.session.commit()
-            logger.warning(f"Post {post.id} failed after {self.MAX_RETRIES} retries")
-        else:
-            retry_minutes = self.RETRY_INTERVALS[post.retry_count - 1]
-            next_attempt = datetime.utcnow() + timedelta(minutes=retry_minutes)
-            post.scheduled_at = next_attempt
-            db.session.commit()
-            logger.info(f"Post {post.id} will retry in {retry_minutes} minutes at {next_attempt}")
     
     def schedule_post(self, post_id: int, scheduled_at: datetime) -> Optional[str]:
         with self.app.app_context():
@@ -200,12 +213,10 @@ class SchedulerService:
             logger.info("Scheduler shut down")
 
 
-_scheduler_instance = None
-
-
 def get_scheduler(app=None):
-    global _scheduler_instance
+    global _scheduler_instance, _app
     if _scheduler_instance is None and app is not None:
+        _app = app
         _scheduler_instance = SchedulerService(app)
         _scheduler_instance.init_scheduler()
     return _scheduler_instance

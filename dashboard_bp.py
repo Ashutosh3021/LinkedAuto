@@ -31,14 +31,14 @@ def get_dashboard_stats():
     
     # Connection stats
     total_profiles = LinkedInProfile.query.count()
-    pending_jobs = ConnectionJob.query.filter(ConnectionJob.status == PostStatus.PENDING).count()
-    running_jobs = ConnectionJob.query.filter(ConnectionJob.status == PostStatus.RUNNING).count()
-    completed_jobs = ConnectionJob.query.filter(ConnectionJob.status == PostStatus.COMPLETED).count()
+    pending_jobs = ConnectionJob.query.filter(ConnectionJob.status == ConnectionJobStatus.PENDING).count()
+    running_jobs = ConnectionJob.query.filter(ConnectionJob.status == ConnectionJobStatus.RUNNING).count()
+    completed_jobs = ConnectionJob.query.filter(ConnectionJob.status == ConnectionJobStatus.COMPLETED).count()
     total_configs = ConnectionConfiguration.query.count()
     
     # Today's connection stats
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    today_stats = DailyConnectionStats.query.filter_by(date=today).first()
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    today_stats = DailyConnectionStats.query.filter(DailyConnectionStats.date == today_str).first()
     today_sent = today_stats.requests_sent if today_stats else 0
     today_accepted = today_stats.requests_accepted if today_stats else 0
     today_failed = today_stats.requests_failed if today_stats else 0
@@ -91,7 +91,8 @@ def get_generated_posts():
                 'scheduled_at': post.scheduled_at.isoformat() if post.scheduled_at else None,
                 'published_at': post.published_at.isoformat() if post.published_at else None,
                 'linkedin_post_id': post.linkedin_post_id,
-                'created_at': post.created_at.isoformat()
+                'created_at': post.created_at.isoformat(),
+                'updated_at': post.updated_at.isoformat()
             }
             for post in posts
         ]
@@ -110,9 +111,10 @@ def get_scheduled_posts():
                 'id': post.id,
                 'title': post.title,
                 'content': post.content,
+                'status': post.status.value,
                 'scheduled_at': post.scheduled_at.isoformat() if post.scheduled_at else None,
-                'retry_count': post.retry_count,
-                'last_error': post.last_error,
+                'published_at': post.published_at.isoformat() if post.published_at else None,
+                'linkedin_post_id': post.linkedin_post_id,
                 'created_at': post.created_at.isoformat()
             }
             for post in posts
@@ -121,7 +123,7 @@ def get_scheduled_posts():
 
 
 @dashboard_bp.route('/api/dashboard/logs', methods=['GET'])
-def get_publishing_logs():
+def get_logs():
     logs = Log.query.order_by(Log.created_at.desc()).limit(100).all()
     return jsonify({
         'success': True,
@@ -136,135 +138,3 @@ def get_publishing_logs():
             for log in logs
         ]
     })
-
-
-@dashboard_bp.route('/api/dashboard/activity', methods=['GET'])
-def get_recent_activity():
-    # Combine posts and logs for recent activity
-    recent_posts = Post.query.order_by(Post.updated_at.desc()).limit(20).all()
-    recent_logs = Log.query.order_by(Log.created_at.desc()).limit(20).all()
-    
-    activities = []
-    
-    for post in recent_posts:
-        activities.append({
-            'type': 'post',
-            'id': post.id,
-            'title': post.title,
-            'status': post.status.value,
-            'timestamp': (post.updated_at or post.created_at).isoformat(),
-            'message': f'Post "{post.title}" is {post.status.value}'
-        })
-    
-    for log in recent_logs:
-        activities.append({
-            'type': 'log',
-            'id': log.id,
-            'level': log.level.value,
-            'message': log.message,
-            'timestamp': log.created_at.isoformat()
-        })
-    
-    # Sort activities by timestamp descending
-    activities.sort(key=lambda x: x['timestamp'], reverse=True)
-    return jsonify({
-        'success': True,
-        'data': activities[:50]
-    })
-
-
-@dashboard_bp.route('/api/dashboard/health', methods=['GET'])
-def get_app_health():
-    try:
-        # Test database connection
-        db.session.execute(db.text('SELECT 1'))
-        
-        # Check for critical errors in last hour
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-        recent_errors = Log.query.filter(
-            Log.level == LogLevel.ERROR,
-            Log.created_at >= one_hour_ago
-        ).count()
-        
-        health_status = 'healthy' if recent_errors == 0 else 'degraded'
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'status': health_status,
-                'database': 'connected',
-                'recent_errors': recent_errors,
-                'timestamp': datetime.utcnow().isoformat()
-            }
-        })
-    except Exception as e:
-        return jsonify({
-            'success': True,
-            'data': {
-                'status': 'unhealthy',
-                'database': 'disconnected',
-                'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
-            }
-        })
-
-
-@dashboard_bp.route('/api/dashboard/scheduler', methods=['GET'])
-def get_scheduler_status():
-    try:
-        scheduler = get_scheduler()
-        if not scheduler or not scheduler.scheduler:
-            return jsonify({
-                'success': True,
-                'data': {
-                    'status': 'not_initialized',
-                    'jobs': []
-                }
-            })
-        
-        jobs = scheduler.scheduler.get_jobs()
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'status': 'running' if scheduler.scheduler.running else 'stopped',
-                'jobs': [
-                    {
-                        'id': job.id,
-                        'name': job.name,
-                        'next_run_time': job.next_run_time.isoformat() if job.next_run_time else None
-                    }
-                    for job in jobs
-                ]
-            }
-        })
-    except Exception as e:
-        return jsonify({
-            'success': True,
-            'data': {
-                'status': 'error',
-                'error': str(e),
-                'jobs': []
-            }
-        })
-
-
-@dashboard_bp.route('/api/dashboard/config', methods=['GET'])
-def get_config_summary():
-    configs = Config.query.all()
-    linkedin_cred = LinkedInCredential.query.order_by(LinkedInCredential.updated_at.desc()).first()
-    
-    config_dict = {c.key: c.value for c in configs}
-    
-    return jsonify({
-        'success': True,
-        'data': {
-            'configurations': config_dict,
-            'linkedin': {
-                'connected': linkedin_cred is not None,
-                'user_id': linkedin_cred.linkedin_user_id if linkedin_cred else None,
-                'token_expires_at': linkedin_cred.token_expires_at.isoformat() if (linkedin_cred and linkedin_cred.token_expires_at) else None
-            }
-        }
-    })
-

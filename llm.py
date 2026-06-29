@@ -1,10 +1,13 @@
 import json
+import logging
 import requests
 from typing import Dict, List, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from config import Config
 from models import Post, PostStatus
 from database import PostHelper
+
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterError(Exception):
@@ -164,7 +167,7 @@ class PostGenerator:
                 )
                 posts.append(post)
             except Exception as e:
-                print(f"Failed to generate post for topic '{topic}': {e}")
+                logger.error(f"Failed to generate post for topic '{topic}': {e}")
                 continue
         
         return posts
