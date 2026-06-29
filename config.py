@@ -1,0 +1,12 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    DEBUG = os.getenv('DEBUG', 'False').lower() in ['true', '1', 't']
+    TESTING = os.getenv('TESTING', 'False').lower() in ['true', '1', 't']
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    
+    FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend')
