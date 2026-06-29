@@ -17,3 +17,11 @@ class Config:
     OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
     OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o-mini')
     OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+    
+    LINKEDIN_CLIENT_ID = os.getenv('LINKEDIN_CLIENT_ID')
+    LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET')
+    LINKEDIN_REDIRECT_URI = os.getenv('LINKEDIN_REDIRECT_URI', 'http://localhost:5000/linkedin/callback')
+    LINKEDIN_SCOPE = 'w_member_social openid profile email'
+    LINKEDIN_AUTH_URL = 'https://www.linkedin.com/oauth/v2/authorization'
+    LINKEDIN_TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken'
+    LINKEDIN_API_BASE_URL = 'https://api.linkedin.com/v2'

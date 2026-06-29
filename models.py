@@ -32,6 +32,18 @@ class Config(db.Model):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class LinkedInCredential(db.Model):
+    __tablename__ = 'linkedin_credentials'
+    
+    id = Column(Integer, primary_key=True)
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    token_expires_at = Column(DateTime, nullable=False)
+    refresh_token_expires_at = Column(DateTime, nullable=True)
+    linkedin_user_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Post(db.Model):
     __tablename__ = 'posts'
     
@@ -41,6 +53,7 @@ class Post(db.Model):
     status = Column(Enum(PostStatus), default=PostStatus.DRAFT, nullable=False)
     scheduled_at = Column(DateTime, nullable=True)
     published_at = Column(DateTime, nullable=True)
+    linkedin_post_id = Column(String(255), nullable=True)
     retry_count = Column(Integer, default=0)
     last_error = Column(Text, nullable=True)
     job_id = Column(String(255), nullable=True)

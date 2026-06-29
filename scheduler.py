@@ -7,16 +7,10 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from config import Config
 from models import db, Post, PostStatus, Log, LogLevel
 from database import PostHelper, LogHelper
+from linkedin import get_linkedin_publisher
 
 
 logger = logging.getLogger(__name__)
-
-
-class Publisher:
-    @staticmethod
-    def publish_post(post_id: int) -> bool:
-        logger.info(f"Publishing post {post_id} - placeholder")
-        return True
 
 
 class SchedulerService:
@@ -74,23 +68,23 @@ class SchedulerService:
         try:
             logger.info(f"Executing post job for post {post.id}")
             
-            success = Publisher.publish_post(post.id)
+            publisher = get_linkedin_publisher()
+            result = publisher.publish_post(post.content)
             
-            if success:
-                post.status = PostStatus.PUBLISHED
-                post.published_at = datetime.utcnow()
-                post.last_error = None
-                db.session.commit()
-                
-                LogHelper.create(
-                    Log,
-                    level=LogLevel.INFO,
-                    message=f"Post {post.id} published successfully",
-                    context=f"Post ID: {post.id}"
-                )
-            else:
-                self.handle_post_failure(post, "Publishing failed")
-                
+            post.status = PostStatus.PUBLISHED
+            post.published_at = datetime.utcnow()
+            post.linkedin_post_id = result.get('post_id') if result else None
+            post.last_error = None
+            post.retry_count = 0
+            db.session.commit()
+            
+            LogHelper.create(
+                Log,
+                level=LogLevel.INFO,
+                message=f"Post {post.id} published successfully",
+                context=f"Post ID: {post.id}, LinkedIn Post ID: {post.linkedin_post_id}"
+            )
+            
         except Exception as e:
             logger.error(f"Error publishing post {post.id}: {e}")
             self.handle_post_failure(post, str(e))
