@@ -180,6 +180,37 @@ async function activateProvider(providerId) {
   });
 }
 
+// LinkedIn App Credentials
+async function getLinkedInApps() {
+  return apiRequest('/api/config/linkedin-app');
+}
+
+async function createLinkedInApp(data) {
+  return apiRequest('/api/config/linkedin-app', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+
+async function updateLinkedInApp(appId, data) {
+  return apiRequest(`/api/config/linkedin-app/${appId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+}
+
+async function deleteLinkedInApp(appId) {
+  return apiRequest(`/api/config/linkedin-app/${appId}`, {
+    method: 'DELETE'
+  });
+}
+
+async function activateLinkedInApp(appId) {
+  return apiRequest(`/api/config/linkedin-app/${appId}/activate`, {
+    method: 'POST'
+  });
+}
+
 /* ================================================================
    2. UTILITY FUNCTIONS
    ================================================================ */
@@ -379,6 +410,43 @@ function closeProviderModal() {
   const overlay = $('#provider-overlay');
   if (overlay) overlay.hidden = true;
   editingProviderId = null;
+}
+
+/* ================================================================
+   LINKEDIN APP MODAL
+   ================================================================ */
+
+let editingLinkedInAppId = null;
+
+function openLinkedInAppModal(app = null) {
+  const overlay = $('#linkedin-app-overlay');
+  const title = $('#linkedin-app-title');
+  const form = $('#form-linkedin-app');
+  
+  editingLinkedInAppId = app?.id || null;
+  
+  if (app) {
+    title.textContent = 'Edit LinkedIn App';
+    $('#linkedin-app-id').value = app.id;
+    $('#linkedin-client-id').value = app.client_id;
+    $('#linkedin-client-secret').value = ''; // Don't populate existing secret
+    $('#linkedin-redirect-uri').value = app.redirect_uri;
+    $('#linkedin-app-active').checked = app.is_active;
+  } else {
+    title.textContent = 'Add LinkedIn App';
+    form.reset();
+    $('#linkedin-app-id').value = '';
+    $('#linkedin-redirect-uri').value = 'http://localhost:5000/linkedin/callback';
+  }
+  
+  overlay.hidden = false;
+  $('#linkedin-client-id').focus();
+}
+
+function closeLinkedInAppModal() {
+  const overlay = $('#linkedin-app-overlay');
+  if (overlay) overlay.hidden = true;
+  editingLinkedInAppId = null;
 }
 
 /* ================================================================
@@ -874,6 +942,85 @@ async function loadProviders() {
   }
 }
 
+async function loadLinkedInApps() {
+  try {
+    const response = await getLinkedInApps();
+    renderLinkedInAppsList(response.data || []);
+  } catch (error) {
+    console.error('Failed to load LinkedIn apps:', error);
+    showToast('Failed to load LinkedIn apps', 'error');
+  }
+}
+
+function renderLinkedInAppsList(apps) {
+  const container = $('#linkedin-apps-list');
+  if (!container) return;
+  
+  if (!apps.length) {
+    container.innerHTML = `<p style="color:var(--color-text-faint);">No LinkedIn apps configured yet. Add your first app above!</p>`;
+    return;
+  }
+  
+  container.innerHTML = apps.map(app => `
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <h4 style="margin:0 0 4px 0;">Client ID: ${escapeHtml(app.client_id)}</h4>
+          <p style="margin:4px 0 0 0;color:var(--color-text-faint);font-size:.75rem;">${escapeHtml(app.redirect_uri)}</p>
+        </div>
+        ${app.is_active ? '<span class="badge badge--success" style="margin-left:12px;">Active</span>' : ''}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-sm btn-secondary btn-edit-linkedin-app" data-id="${app.id}">Edit</button>
+        ${!app.is_active ? `<button class="btn btn-sm btn-primary btn-activate-linkedin-app" data-id="${app.id}">Activate</button>` : ''}
+        <button class="btn btn-sm btn-ghost btn-delete-linkedin-app" data-id="${app.id}" style="color:var(--color-red);">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  
+  $('.btn-edit-linkedin-app', container).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      const app = apps.find(a => a.id === id);
+      if (app) openLinkedInAppModal(app);
+    });
+  });
+  
+  $('.btn-activate-linkedin-app', container).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      try {
+        showLoading('Activating app…');
+        await activateLinkedInApp(id);
+        hideLoading();
+        showToast('App activated successfully!', 'success');
+        await loadLinkedInApps();
+      } catch (error) {
+        hideLoading();
+        showToast('Failed to activate app', 'error');
+      }
+    });
+  });
+  
+  $('.btn-delete-linkedin-app', container).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      showConfirm('Delete this LinkedIn app? This cannot be undone.', async () => {
+        try {
+          showLoading('Deleting app…');
+          await deleteLinkedInApp(id);
+          hideLoading();
+          showToast('App deleted successfully!', 'success');
+          await loadLinkedInApps();
+        } catch (error) {
+          hideLoading();
+          showToast('Failed to delete app', 'error');
+        }
+      });
+    });
+  });
+}
+
 function renderProvidersList(providers) {
   const container = $('#providers-list');
   if (!container) return;
@@ -979,8 +1126,8 @@ async function initSettingsPage() {
     console.error('Failed to load LinkedIn status:', error);
   }
   
-  // Load providers
-  await loadProviders();
+  // Load providers and LinkedIn apps
+  await Promise.all([loadProviders(), loadLinkedInApps()]);
   
   // Add provider button
   $('#btn-add-provider')?.addEventListener('click', () => openProviderModal());
@@ -1030,6 +1177,54 @@ async function initSettingsPage() {
   $('#provider-overlay')?.addEventListener('click', e => {
     if (e.target === $('#provider-overlay')) closeProviderModal();
   });
+  
+  // Add LinkedIn app button
+  $('#btn-add-linkedin-app')?.addEventListener('click', () => openLinkedInAppModal());
+  
+  // LinkedIn app modal save
+  $('#btn-linkedin-app-save')?.addEventListener('click', async () => {
+    const data = {
+      client_id: $('#linkedin-client-id')?.value.trim(),
+      client_secret: $('#linkedin-client-secret')?.value.trim(),
+      redirect_uri: $('#linkedin-redirect-uri')?.value.trim(),
+      is_active: $('#linkedin-app-active')?.checked
+    };
+    
+    if (!data.client_id || !data.redirect_uri) {
+      showToast('Please fill in all required fields', 'error');
+      return;
+    }
+    
+    if (!editingLinkedInAppId && !data.client_secret) {
+      showToast('Client secret is required for new apps', 'error');
+      return;
+    }
+    
+    try {
+      showLoading('Saving app…');
+      
+      if (editingLinkedInAppId) {
+        await updateLinkedInApp(editingLinkedInAppId, data);
+      } else {
+        await createLinkedInApp(data);
+      }
+      
+      hideLoading();
+      closeLinkedInAppModal();
+      showToast('App saved successfully!', 'success');
+      await loadLinkedInApps();
+    } catch (error) {
+      hideLoading();
+      showToast(error.message || 'Failed to save app', 'error');
+    }
+  });
+  
+  // LinkedIn app modal cancel
+  $('#btn-linkedin-app-cancel')?.addEventListener('click', closeLinkedInAppModal);
+  $('#btn-linkedin-app-close')?.addEventListener('click', closeLinkedInAppModal);
+  $('#linkedin-app-overlay')?.addEventListener('click', e => {
+    if (e.target === $('#linkedin-app-overlay')) closeLinkedInAppModal();
+  });
 }
 
 /* ================================================================
@@ -1059,6 +1254,7 @@ function initModals() {
       closePreviewModal();
       closeConfirmDialog();
       closeProviderModal();
+      closeLinkedInAppModal();
     }
   });
 }

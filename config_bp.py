@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Config, AIProvider
+from models import db, Config, AIProvider, LinkedInAppCredentials
 from database import ConfigHelper
 from utils import encrypt_api_key
 import json
@@ -245,6 +245,148 @@ def activate_provider(provider_id):
         return jsonify({
             'success': True,
             'message': 'Provider activated successfully'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# LinkedIn App Credentials endpoints
+def validate_linkedin_app_creds(data):
+    errors = []
+    if not data.get('client_id'):
+        errors.append("Client ID is required")
+    if not data.get('client_secret'):
+        errors.append("Client Secret is required")
+    return errors
+
+@config_bp.route('/linkedin-app', methods=['GET'])
+def get_linkedin_app_creds():
+    try:
+        creds = LinkedInAppCredentials.query.all()
+        return jsonify({
+            'success': True,
+            'data': [
+                {
+                    'id': c.id,
+                    'client_id': c.client_id,
+                    'redirect_uri': c.redirect_uri,
+                    'is_active': c.is_active,
+                    'created_at': c.created_at.isoformat() if c.created_at else None,
+                    'updated_at': c.updated_at.isoformat() if c.updated_at else None
+                }
+                for c in creds
+            ]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@config_bp.route('/linkedin-app', methods=['POST'])
+def create_linkedin_app_creds():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        errors = validate_linkedin_app_creds(data)
+        if errors:
+            return jsonify({'error': 'Validation failed', 'details': errors}), 400
+        
+        creds = LinkedInAppCredentials(
+            client_id=data['client_id'],
+            client_secret_encrypted=encrypt_api_key(data['client_secret']),
+            redirect_uri=data.get('redirect_uri', 'http://localhost:5000/linkedin/callback'),
+            is_active=data.get('is_active', False)
+        )
+        
+        # If setting as active, deactivate others
+        if creds.is_active:
+            LinkedInAppCredentials.query.update({'is_active': False})
+        
+        db.session.add(creds)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'LinkedIn app credentials created successfully',
+            'data': {
+                'id': creds.id,
+                'client_id': creds.client_id,
+                'redirect_uri': creds.redirect_uri,
+                'is_active': creds.is_active
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@config_bp.route('/linkedin-app/<int:creds_id>', methods=['PUT'])
+def update_linkedin_app_creds(creds_id):
+    try:
+        creds = LinkedInAppCredentials.query.get(creds_id)
+        if not creds:
+            return jsonify({'error': 'Credentials not found'}), 404
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        if 'client_id' in data:
+            creds.client_id = data['client_id']
+        
+        if 'client_secret' in data:
+            creds.client_secret_encrypted = encrypt_api_key(data['client_secret'])
+        
+        if 'redirect_uri' in data:
+            creds.redirect_uri = data['redirect_uri']
+        
+        if 'is_active' in data:
+            if data['is_active']:
+                LinkedInAppCredentials.query.update({'is_active': False})
+            creds.is_active = data['is_active']
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'LinkedIn app credentials updated successfully'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@config_bp.route('/linkedin-app/<int:creds_id>', methods=['DELETE'])
+def delete_linkedin_app_creds(creds_id):
+    try:
+        creds = LinkedInAppCredentials.query.get(creds_id)
+        if not creds:
+            return jsonify({'error': 'Credentials not found'}), 404
+        
+        db.session.delete(creds)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'LinkedIn app credentials deleted successfully'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@config_bp.route('/linkedin-app/<int:creds_id>/activate', methods=['POST'])
+def activate_linkedin_app_creds(creds_id):
+    try:
+        creds = LinkedInAppCredentials.query.get(creds_id)
+        if not creds:
+            return jsonify({'error': 'Credentials not found'}), 404
+        
+        # Deactivate all others
+        LinkedInAppCredentials.query.update({'is_active': False})
+        creds.is_active = True
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'LinkedIn app credentials activated successfully'
         }), 200
     except Exception as e:
         db.session.rollback()

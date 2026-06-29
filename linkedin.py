@@ -5,8 +5,9 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from requests_oauthlib import OAuth2Session
 from config import Config
-from models import db, LinkedInCredential, LogLevel, Post
+from models import db, LinkedInCredential, LogLevel, Post, LinkedInAppCredentials
 from database import LogHelper, PostHelper
+from utils import decrypt_api_key
 
 
 logger = logging.getLogger(__name__)
@@ -14,9 +15,16 @@ logger = logging.getLogger(__name__)
 
 class LinkedInAuth:
     def __init__(self):
-        self.client_id = Config.LINKEDIN_CLIENT_ID
-        self.client_secret = Config.LINKEDIN_CLIENT_SECRET
-        self.redirect_uri = Config.LINKEDIN_REDIRECT_URI
+        # Try to get active app credentials from DB first, fall back to Config
+        app_creds = LinkedInAppCredentials.query.filter_by(is_active=True).first()
+        if app_creds:
+            self.client_id = app_creds.client_id
+            self.client_secret = decrypt_api_key(app_creds.client_secret_encrypted)
+            self.redirect_uri = app_creds.redirect_uri
+        else:
+            self.client_id = Config.LINKEDIN_CLIENT_ID
+            self.client_secret = Config.LINKEDIN_CLIENT_SECRET
+            self.redirect_uri = Config.LINKEDIN_REDIRECT_URI
         self.scope = Config.LINKEDIN_SCOPE
         self.auth_url = Config.LINKEDIN_AUTH_URL
         self.token_url = Config.LINKEDIN_TOKEN_URL

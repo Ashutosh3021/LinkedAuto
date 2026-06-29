@@ -32,6 +32,17 @@ class Config(db.Model):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class LinkedInAppCredentials(db.Model):
+    __tablename__ = 'linkedin_app_credentials'
+    
+    id = Column(Integer, primary_key=True)
+    client_id = Column(String(255), nullable=False)
+    client_secret_encrypted = Column(Text, nullable=False)
+    redirect_uri = Column(String(500), nullable=False, default='http://localhost:5000/linkedin/callback')
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class LinkedInCredential(db.Model):
     __tablename__ = 'linkedin_credentials'
     
