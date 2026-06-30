@@ -1,7 +1,7 @@
 import os
 import atexit
 import logging
-from flask import Flask, render_template, send_from_directory, Blueprint
+from flask import Flask, render_template, send_from_directory, Blueprint, request, jsonify
 from flask_cors import CORS
 from config import Config
 from database import init_db
@@ -54,11 +54,34 @@ def create_app(config_class=Config):
     
     @app.errorhandler(404)
     def not_found(error):
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'code': 404,
+                'message': 'Endpoint not found',
+                'data': None
+            }), 404
         return render_template('index.html'), 404
     
     @app.errorhandler(500)
     def internal_error(error):
-        app.logger.error(f'Server Error: {error}')
+        app.logger.error(f'Server Error: {error}', exc_info=True)
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'code': 500,
+                'message': 'Internal server error',
+                'data': None
+            }), 500
+        return 'Internal Server Error', 500
+    
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(error):
+        app.logger.error(f'Unexpected error: {error}', exc_info=True)
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'code': 500,
+                'message': 'Internal server error',
+                'data': None
+            }), 500
         return 'Internal Server Error', 500
     
     return app

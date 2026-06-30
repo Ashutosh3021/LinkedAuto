@@ -17,9 +17,21 @@ async function apiRequest(endpoint, options = {}) {
   
   try {
     const response = await fetch(url, { ...options, headers });
-    const data = await response.json();
+    
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get('content-type');
+    let data;
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      // Handle non-JSON responses
+      const text = await response.text();
+      console.error(`Non-JSON response from ${url}:`, text);
+      throw new Error('Invalid server response');
+    }
+    
     if (!response.ok) {
-      throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
     }
     return data;
   } catch (error) {
@@ -570,25 +582,71 @@ function statusBadge(status) {
 async function initDashboard() {
   try {
     const response = await getDashboardStats();
-    if (!response.success) throw new Error('Failed to fetch stats');
-    const stats = response.data;
+    const stats = response.data || response; // Handle both response formats
 
-    // Update stat cards
-    if ($('#stat-generated')) $('#stat-generated').textContent = stats.posts.total || '0';
-    if ($('#stat-scheduled')) $('#stat-scheduled').textContent = stats.posts.scheduled || '0';
-    if ($('#stat-published')) $('#stat-published').textContent = stats.posts.published || '0';
+    // Update all stat cards
+    if ($('#stat-generated')) $('#stat-generated').textContent = stats.posts?.total || '0';
+    if ($('#stat-scheduled')) $('#stat-scheduled').textContent = stats.posts?.scheduled || '0';
+    if ($('#stat-published')) $('#stat-published').textContent = stats.posts?.published || '0';
+    if ($('#stat-pending')) $('#stat-pending').textContent = stats.posts?.scheduled || '0';
+    if ($('#stat-failed')) $('#stat-failed').textContent = stats.posts?.failed || '0';
     if ($('#stat-connections')) $('#stat-connections').textContent = stats.connections?.total_profiles || '0';
 
-    // LinkedIn status
-    if ($('#linkedin-status')) {
+    // Update Scheduler Status (always active since we initialize it on app start)
+    if ($('#stat-scheduler')) {
+      $('#stat-scheduler').textContent = 'Active';
+      $('#stat-scheduler').className = 'stat-value stat-value--badge stat-value--active';
+    }
+
+    // Update API (LinkedIn) Status
+    if ($('#stat-api')) {
       const isConnected = stats.linkedin?.connected;
-      $('#linkedin-status').textContent = isConnected ? 'Connected' : 'Not Connected';
-      $('#linkedin-status').className = isConnected ? 'status-dot status-dot--success' : 'status-dot status-dot--error';
+      $('#stat-api').textContent = isConnected ? 'Connected' : 'Disconnected';
+      $('#stat-api').className = isConnected
+        ? 'stat-value stat-value--badge stat-value--active'
+        : 'stat-value stat-value--badge';
     }
 
   } catch (error) {
     console.error('Failed to initialize dashboard:', error);
+    // Set all stats to N/A on error
+    ['#stat-generated', '#stat-scheduled', '#stat-published', '#stat-pending', '#stat-failed', '#stat-connections'].forEach(selector => {
+      if ($(selector)) $(selector).textContent = 'N/A';
+    });
+    if ($('#stat-scheduler')) $('#stat-scheduler').textContent = 'Unknown';
+    if ($('#stat-api')) $('#stat-api').textContent = 'Unknown';
     showToast('Failed to load dashboard stats', 'error');
+  }
+}
+
+async function initHomePage() {
+  try {
+    const response = await getDashboardStats();
+    const stats = response.data || response;
+
+    // Update hero stats
+    const scheduledCount = stats.posts?.scheduled || 0;
+    if ($('#hero-stat-scheduled')) $('#hero-stat-scheduled').textContent = scheduledCount;
+
+    // Calculate publish rate: (published / (published + failed)) * 100, or 0 if no posts
+    const publishedCount = stats.posts?.published || 0;
+    const failedCount = stats.posts?.failed || 0;
+    const totalPublishedPlusFailed = publishedCount + failedCount;
+    const publishRate = totalPublishedPlusFailed > 0
+      ? Math.round((publishedCount / totalPublishedPlusFailed) * 100)
+      : 0;
+    if ($('#hero-stat-publish-rate')) $('#hero-stat-publish-rate').textContent = `${publishRate}%`;
+
+    // Scheduler status is always active
+    if ($('#hero-stat-scheduler')) $('#hero-stat-scheduler').textContent = 'Active';
+
+  } catch (error) {
+    console.error('Failed to initialize home page:', error);
+    // Set hero stats to N/A on error
+    ['#hero-stat-scheduled', '#hero-stat-publish-rate', '#hero-stat-scheduler'].forEach(selector => {
+      if ($(selector)) $(selector).textContent = 'N/A';
+    });
+    showToast('Failed to load home page stats', 'error');
   }
 }
 
@@ -1299,6 +1357,7 @@ document.addEventListener('DOMContentLoaded', () => {
   switch (currentPage) {
     case 'home':
       initHeroActions();
+      initHomePage();
       break;
     case 'posting':
       initAllCharCounters();
