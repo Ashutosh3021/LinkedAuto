@@ -4,8 +4,10 @@ from typing import Dict, List, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
+from sqlalchemy.exc import SQLAlchemyError
 from config import Config
 from database import db, Post, PostStatus, Log, LogLevel, PostHelper, LogHelper
+from utils import retry_db_operation
 from .linkedin import get_linkedin_publisher
 
 
@@ -20,6 +22,7 @@ RETRY_INTERVALS = [15, 60, 360]
 MAX_RETRIES = 3
 
 
+@retry_db_operation(max_retries=3)
 def _process_pending_posts():
     """Standalone function to process pending posts (picklable)"""
     if not _app:
@@ -27,17 +30,24 @@ def _process_pending_posts():
         return
     
     with _app.app_context():
-        now = datetime.utcnow()
-        
-        scheduled_posts = Post.query.filter(
-            Post.status == PostStatus.SCHEDULED,
-            Post.scheduled_at <= now
-        ).all()
-        
-        for post in scheduled_posts:
-            _execute_post_job(post)
+        try:
+            now = datetime.utcnow()
+            
+            scheduled_posts = Post.query.filter(
+                Post.status == PostStatus.SCHEDULED,
+                Post.scheduled_at <= now
+            ).all()
+            
+            for post in scheduled_posts:
+                _execute_post_job(post)
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in _process_pending_posts: {str(e)}", exc_info=True)
+            # Rollback on any SQLAlchemy error to keep session clean
+            db.session.rollback()
+            raise  # Re-raise to trigger retry
 
 
+@retry_db_operation(max_retries=2)
 def _execute_post_job(post: Post):
     try:
         logger.info(f"Executing post job for post {post.id}")
@@ -59,32 +69,41 @@ def _execute_post_job(post: Post):
             context=f"Post ID: {post.id}, LinkedIn Post ID: {post.linkedin_post_id}"
         )
         
+    except SQLAlchemyError as e:
+        logger.error(f"Database error publishing post {post.id}: {str(e)}", exc_info=True)
+        db.session.rollback()
+        raise  # Re-raise to trigger retry
     except Exception as e:
         logger.error(f"Error publishing post {post.id}: {e}")
+        db.session.rollback()  # Always rollback on exception
         _handle_post_failure(post, str(e))
 
 
 def _handle_post_failure(post: Post, error_message: str):
-    post.retry_count += 1
-    post.last_error = error_message
-    
-    LogHelper.create(
-        Log,
-        level=LogLevel.ERROR,
-        message=f"Post {post.id} failed to publish: {error_message}",
-        context=f"Post ID: {post.id}, Retry count: {post.retry_count}"
-    )
-    
-    if post.retry_count >= MAX_RETRIES:
-        post.status = PostStatus.FAILED
-        db.session.commit()
-        logger.warning(f"Post {post.id} failed after {MAX_RETRIES} retries")
-    else:
-        retry_minutes = RETRY_INTERVALS[post.retry_count - 1]
-        next_attempt = datetime.utcnow() + timedelta(minutes=retry_minutes)
-        post.scheduled_at = next_attempt
-        db.session.commit()
-        logger.info(f"Post {post.id} will retry in {retry_minutes} minutes at {next_attempt}")
+    try:
+        post.retry_count += 1
+        post.last_error = error_message
+        
+        LogHelper.create(
+            Log,
+            level=LogLevel.ERROR,
+            message=f"Post {post.id} failed to publish: {error_message}",
+            context=f"Post ID: {post.id}, Retry count: {post.retry_count}"
+        )
+        
+        if post.retry_count >= MAX_RETRIES:
+            post.status = PostStatus.FAILED
+            db.session.commit()
+            logger.warning(f"Post {post.id} failed after {MAX_RETRIES} retries")
+        else:
+            retry_minutes = RETRY_INTERVALS[post.retry_count - 1]
+            next_attempt = datetime.utcnow() + timedelta(minutes=retry_minutes)
+            post.scheduled_at = next_attempt
+            db.session.commit()
+            logger.info(f"Post {post.id} will retry in {retry_minutes} minutes at {next_attempt}")
+    except SQLAlchemyError as e:
+        logger.error(f"Database error handling post failure {post.id}: {str(e)}", exc_info=True)
+        db.session.rollback()
 
 
 class SchedulerService:
@@ -93,15 +112,21 @@ class SchedulerService:
         self.scheduler = None
         
     def init_scheduler(self):
+        # Use the same connection pool settings for APScheduler job store
         jobstores = {
-            'default': SQLAlchemyJobStore(url=Config.SQLALCHEMY_DATABASE_URI, engine_options={'connect_args': {'check_same_thread': False}} if 'sqlite' in Config.SQLALCHEMY_DATABASE_URI else {})
+            'default': SQLAlchemyJobStore(
+                url=Config.SQLALCHEMY_DATABASE_URI,
+                engine_options=Config.SQLALCHEMY_ENGINE_OPTIONS if hasattr(Config, 'SQLALCHEMY_ENGINE_OPTIONS') 
+                    else ({'connect_args': {'check_same_thread': False}} if 'sqlite' in Config.SQLALCHEMY_DATABASE_URI else {})
+            )
         }
         executors = {
             'default': ThreadPoolExecutor(10)
         }
         job_defaults = {
-            'coalesce': False,
-            'max_instances': 1
+            'coalesce': True,  # Coalesce missed jobs
+            'max_instances': 1,
+            'misfire_grace_time': 300  # 5 minutes grace time for misfired jobs
         }
         
         self.scheduler = BackgroundScheduler(
@@ -123,6 +148,7 @@ class SchedulerService:
         self.scheduler.start()
         logger.info("Scheduler initialized")
     
+    @retry_db_operation(max_retries=2)
     def schedule_post(self, post_id: int, scheduled_at: datetime) -> Optional[str]:
         with self.app.app_context():
             post = PostHelper.get(Post, post_id)
@@ -144,6 +170,7 @@ class SchedulerService:
             
             return job_id
     
+    @retry_db_operation(max_retries=2)
     def cancel_schedule(self, post_id: int) -> bool:
         with self.app.app_context():
             post = PostHelper.get(Post, post_id)
@@ -166,6 +193,7 @@ class SchedulerService:
             
             return True
     
+    @retry_db_operation(max_retries=2)
     def reschedule_post(self, post_id: int, new_scheduled_at: datetime) -> bool:
         with self.app.app_context():
             post = PostHelper.get(Post, post_id)
@@ -186,6 +214,7 @@ class SchedulerService:
             
             return True
     
+    @retry_db_operation(max_retries=2)
     def get_queue(self) -> List[Dict]:
         with self.app.app_context():
             posts = Post.query.filter(
@@ -208,7 +237,7 @@ class SchedulerService:
     
     def shutdown(self):
         if self.scheduler and self.scheduler.running:
-            self.scheduler.shutdown()
+            self.scheduler.shutdown(wait=True)
             logger.info("Scheduler shut down")
 
 

@@ -7,12 +7,14 @@ from database import (
     ConnectionJobStatus, ConnectionConfiguration, LinkedInProfile, DailyConnectionStats
 )
 from services import get_scheduler
+from utils import retry_db_operation
 
 logger = logging.getLogger(__name__)
 dashboard_bp = Blueprint('dashboard', __name__)
 
 
 @dashboard_bp.route('/api/dashboard/stats', methods=['GET'])
+@retry_db_operation(max_retries=2)
 def get_dashboard_stats():
     try:
         # Count posts by status
@@ -88,6 +90,7 @@ def get_dashboard_stats():
 
 
 @dashboard_bp.route('/api/dashboard/posts/generated', methods=['GET'])
+@retry_db_operation(max_retries=2)
 def get_generated_posts():
     try:
         posts = Post.query.order_by(Post.created_at.desc()).limit(50).all()
@@ -118,6 +121,7 @@ def get_generated_posts():
 
 
 @dashboard_bp.route('/api/dashboard/posts/scheduled', methods=['GET'])
+@retry_db_operation(max_retries=2)
 def get_scheduled_posts():
     try:
         posts = Post.query.filter(
@@ -149,6 +153,7 @@ def get_scheduled_posts():
 
 
 @dashboard_bp.route('/api/dashboard/logs', methods=['GET'])
+@retry_db_operation(max_retries=2)
 def get_logs():
     try:
         logs = Log.query.order_by(Log.created_at.desc()).limit(100).all()
