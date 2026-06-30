@@ -1,8 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
-from scheduler import get_scheduler
-from models import Post
-from database import PostHelper
+from services import get_scheduler
+from database import Post, PostHelper
 
 
 scheduler_bp = Blueprint('scheduler', __name__)

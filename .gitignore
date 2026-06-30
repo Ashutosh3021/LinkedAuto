@@ -6,3 +6,4 @@ plan.md
 *.sqlite
 *.sqlite3
 instance/
+docs/

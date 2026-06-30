@@ -1,11 +1,11 @@
 from flask import Blueprint, jsonify
 from datetime import datetime, timedelta
-from models import (
+from database import (
     db, Post, PostStatus, Log, LogLevel,
     Config, LinkedInCredential, ConnectionJob,
     ConnectionConfiguration, LinkedInProfile, DailyConnectionStats
 )
-from scheduler import get_scheduler
+from services import get_scheduler
 
 dashboard_bp = Blueprint('dashboard', __name__)
 

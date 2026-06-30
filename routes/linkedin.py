@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, session, redirect
 from config import Config
-from linkedin import get_linkedin_auth, get_linkedin_token_manager, get_linkedin_publisher
+from services import get_linkedin_auth, get_linkedin_token_manager, get_linkedin_publisher
+from database import LinkedInCredential, db
 
 
 linkedin_bp = Blueprint('linkedin', __name__)
@@ -36,7 +37,6 @@ def linkedin_callback():
         user_info = publisher.get_user_info(credential.access_token)
         if user_info and 'sub' in user_info:
             credential.linkedin_user_id = user_info['sub']
-            from models import db
             db.session.commit()
         
         return redirect('/settings')
@@ -67,7 +67,6 @@ def linkedin_status():
 @linkedin_bp.route('/api/linkedin/disconnect', methods=['POST'])
 def linkedin_disconnect():
     try:
-        from models import LinkedInCredential, db
         credentials = LinkedInCredential.query.all()
         for cred in credentials:
             db.session.delete(cred)

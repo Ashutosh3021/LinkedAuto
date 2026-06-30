@@ -5,9 +5,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
 from config import Config
-from models import db, Post, PostStatus, Log, LogLevel
-from database import PostHelper, LogHelper
-from linkedin import get_linkedin_publisher
+from database import db, Post, PostStatus, Log, LogLevel, PostHelper, LogHelper
+from .linkedin import get_linkedin_publisher
 
 
 logger = logging.getLogger(__name__)

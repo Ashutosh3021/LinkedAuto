@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
-from llm import PostGenerator, AIProviderError
-from database import PostHelper
-from models import Post
+from services import PostGenerator, AIProviderError
+from database import PostHelper, Post
 
 
 generator_bp = Blueprint('generator', __name__)

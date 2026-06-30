@@ -5,8 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from requests_oauthlib import OAuth2Session
 from config import Config
-from models import db, LinkedInCredential, LogLevel, Post, LinkedInAppCredentials
-from database import LogHelper, PostHelper
+from database import db, LinkedInCredential, LogLevel, Post, LinkedInAppCredentials, LogHelper, PostHelper
 from utils import decrypt_api_key
 
 

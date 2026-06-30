@@ -4,8 +4,7 @@ import requests
 from typing import Dict, List, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from config import Config
-from models import Post, PostStatus, AIProvider, db
-from database import PostHelper
+from database import Post, PostStatus, AIProvider, db, PostHelper
 from utils import decrypt_api_key
 
 

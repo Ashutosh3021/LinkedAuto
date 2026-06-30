@@ -1,4 +1,4 @@
-from models import (
+from .models import (
     db, Config, Post, Log, ConnectionJob,
     LinkedInCredential, ConnectionConfiguration,
     LinkedInProfile, DailyConnectionStats, AIProvider,

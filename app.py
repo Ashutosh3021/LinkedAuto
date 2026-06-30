@@ -5,13 +5,8 @@ from flask import Flask, render_template, send_from_directory, Blueprint
 from flask_cors import CORS
 from config import Config
 from database import init_db
-from config_bp import config_bp
-from generator_bp import generator_bp
-from scheduler_bp import scheduler_bp
-from linkedin_bp import linkedin_bp
-from dashboard_bp import dashboard_bp
-from connection_bp import connection_bp
-from scheduler import get_scheduler
+from routes import config_bp, generator_bp, scheduler_bp, linkedin_bp, dashboard_bp, connection_bp
+from services import get_scheduler
 
 def setup_logging(app):
     log_level = getattr(logging, app.config['LOG_LEVEL'].upper(), logging.INFO)
@@ -104,4 +99,5 @@ def create_main_blueprint():
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)

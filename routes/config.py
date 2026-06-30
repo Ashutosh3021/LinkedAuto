@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Config, AIProvider, LinkedInAppCredentials
-from database import ConfigHelper
+from database import db, Config, AIProvider, LinkedInAppCredentials, ConfigHelper
 from utils import encrypt_api_key
 import json
 

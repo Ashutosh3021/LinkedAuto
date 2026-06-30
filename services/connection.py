@@ -2,13 +2,12 @@ import asyncio
 import logging
 from datetime import datetime, date
 from typing import List, Dict, Optional
-from models import (
+from database import (
     db, ConnectionConfiguration, LinkedInProfile,
     ConnectionJob, ConnectionJobStatus, DailyConnectionStats,
-    Log, LogLevel
+    Log, LogLevel, LogHelper
 )
-from database import LogHelper
-from browser_service import get_browser_service
+from .browser import get_browser_service
 
 logger = logging.getLogger(__name__)
 

@@ -1,11 +1,11 @@
 import threading
 import asyncio
 from flask import Blueprint, request, jsonify, current_app
-from models import (
+from database import (
     db, ConnectionConfiguration, LinkedInProfile,
     ConnectionJob, ConnectionJobStatus, DailyConnectionStats
 )
-from connection_service import get_connection_service
+from services import get_connection_service
 
 connection_bp = Blueprint('connection', __name__)
 
