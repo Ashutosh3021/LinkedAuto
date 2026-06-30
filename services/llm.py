@@ -15,6 +15,16 @@ class AIProviderError(Exception):
     pass
 
 
+class RetryableAIProviderError(AIProviderError):
+    """Errors that are safe to retry (network timeouts, 5xx server errors)"""
+    pass
+
+
+class NonRetryableAIProviderError(AIProviderError):
+    """Errors that should NOT be retried (invalid API keys, 404, etc.)"""
+    pass
+
+
 class AIProviderAPI:
     def __init__(self, provider: AIProvider):
         self.provider = provider
@@ -33,11 +43,16 @@ class AIProviderAPI:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((requests.exceptions.RequestException, AIProviderError))
+        retry=retry_if_exception_type((
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            RetryableAIProviderError
+        ))
     )
     def generate_completion(self, messages: List[Dict[str, str]], max_tokens: int = 1000) -> str:
         if not self.api_key:
-            raise AIProviderError(f"API key not configured for provider {self.provider.name}")
+            raise NonRetryableAIProviderError(f"API key not configured for provider {self.provider.name}")
 
         url = f"{self.base_url}/chat/completions"
         payload = {
@@ -47,16 +62,53 @@ class AIProviderAPI:
         }
 
         try:
+            logger.info(f"Sending request to {self.provider.name} at {url}")
             response = requests.post(url, headers=self._get_headers(), json=payload, timeout=60)
+            
+            # Log detailed response info
+            logger.debug(f"Response status code: {response.status_code}")
+            logger.debug(f"Response headers: {dict(response.headers)}")
+            
+            try:
+                response_body = response.json()
+                logger.debug(f"Response body: {response_body}")
+            except Exception:
+                response_body = response.text
+                logger.debug(f"Response text: {response_body}")
+            
+            if 500 <= response.status_code < 600:
+                raise RetryableAIProviderError(
+                    f"Provider {self.provider.name} server error ({response.status_code}): {response_body}"
+                )
+            
             response.raise_for_status()
-            result = response.json()
             
-            if "choices" not in result or not result["choices"]:
-                raise AIProviderError(f"Invalid response from provider {self.provider.name}")
+            if "choices" not in response_body or not response_body["choices"]:
+                raise NonRetryableAIProviderError(
+                    f"Invalid response from provider {self.provider.name}: {response_body}"
+                )
             
-            return result["choices"][0]["message"]["content"].strip()
+            return response_body["choices"][0]["message"]["content"].strip()
+            
+        except requests.exceptions.Timeout as e:
+            raise RetryableAIProviderError(f"Request to {self.provider.name} timed out") from e
+        except requests.exceptions.ConnectionError as e:
+            raise RetryableAIProviderError(f"Connection error to {self.provider.name}") from e
+        except requests.exceptions.HTTPError as e:
+            # Log full details
+            logger.error(f"HTTP error calling {self.provider.name}: {response.status_code}")
+            logger.error(f"Response body: {response_body}")
+            if 400 <= response.status_code < 500:
+                raise NonRetryableAIProviderError(
+                    f"Provider {self.provider.name} client error ({response.status_code}): {response_body}"
+                ) from e
+            else:
+                raise RetryableAIProviderError(
+                    f"Provider {self.provider.name} server error ({response.status_code}): {response_body}"
+                ) from e
         except requests.exceptions.RequestException as e:
-            raise AIProviderError(f"API request failed: {str(e)}") from e
+            logger.error(f"Request exception calling {self.provider.name}: {e}")
+            raise NonRetryableAIProviderError(f"API request failed: {str(e)}") from e
 
 
 class PromptBuilder:

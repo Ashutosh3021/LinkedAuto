@@ -1,6 +1,6 @@
 from .scheduler import get_scheduler
 from .linkedin import get_linkedin_auth, get_linkedin_token_manager, get_linkedin_publisher
-from .llm import PostGenerator, AIProviderError
+from .llm import PostGenerator, AIProviderError, RetryableAIProviderError, NonRetryableAIProviderError
 from .connection import get_connection_service
 from .browser import get_browser_service
 
@@ -11,6 +11,8 @@ __all__ = [
     'get_linkedin_publisher',
     'PostGenerator',
     'AIProviderError',
+    'RetryableAIProviderError',
+    'NonRetryableAIProviderError',
     'get_connection_service',
     'get_browser_service'
 ]

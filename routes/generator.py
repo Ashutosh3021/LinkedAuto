@@ -1,8 +1,10 @@
+import logging
 from flask import Blueprint, request, jsonify
-from services import PostGenerator, AIProviderError
+from services import PostGenerator, AIProviderError, NonRetryableAIProviderError, RetryableAIProviderError
 from database import PostHelper, Post
 
 
+logger = logging.getLogger(__name__)
 generator_bp = Blueprint('generator', __name__)
 post_generator = PostGenerator()
 
@@ -24,6 +26,7 @@ def generate_single_post():
         hashtags = data.get('hashtags')
         character_limit = data.get('character_limit')
         
+        logger.info(f"Generating post for topic: {topic}")
         post = post_generator.generate_single_post(
             topic=topic,
             title=title,
@@ -35,6 +38,7 @@ def generate_single_post():
             character_limit=character_limit
         )
         
+        logger.info(f"Generated post {post.id} successfully!")
         return jsonify({
             'success': True,
             'post': {
@@ -52,9 +56,17 @@ def generate_single_post():
             }
         }), 201
         
+    except NonRetryableAIProviderError as e:
+        logger.error(f"Non-retryable error generating post: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 400
+    except RetryableAIProviderError as e:
+        logger.error(f"Retryable error generating post (tried max retries): {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 503
     except AIProviderError as e:
+        logger.error(f"AI provider error generating post: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
     except Exception as e:
+        logger.error(f"Unexpected error generating post: {e}", exc_info=True)
         return jsonify({'error': f'Failed to generate post: {str(e)}'}), 500
 
 
